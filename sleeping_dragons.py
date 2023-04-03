@@ -74,9 +74,39 @@ def draw():
 
     
 def draw_lairs(lairs_to_draw):
-    pass
+    for lair in lairs_to_draw:
+        lair["dragon"].draw()
+        if lair["egg_hidden"] is False:
+            lair["eggs"].draw()
 
 def draw_counters(eggs_collected, lives):
+    screen.blit("C:\\tmp\\sleeping_dragons\\images\\egg-count.png", (0, HEIGHT - 30))
+    screen.draw.text(str(eggs_collected), fontsize=40, pos=(30, HEIGHT -30), color=FONT_COLOR)
+    screen.blit("C:\\tmp\\sleeping_dragons\\images\\life-count.png", (60, HEIGHT - 30))
+    screen.draw.text(str(lives), fontsize=40, pos=(90, HEIGHT -30), color=FONT_COLOR)
+
+
+def update():
+    if keyboard.right:
+        hero.x += MOVE_DISTANCE
+        if hero.x > WIDTH:
+            hero.x = WIDTH
+    elif keyboard.left:
+        hero.x -= MOVE_DISTANCE
+        if hero.x < 0:
+            hero.x = 0
+    elif keyboard.down:
+        hero.y += MOVE_DISTANCE
+        if hero.y > HEIGHT:
+            hero.y = HEIGHT
+    elif keyboard.up:
+        hero.y -= MOVE_DISTANCE
+        if hero.y < 0:
+            hero.y = 0
+    check_for_collisions()
+
+def check_for_collisions():
     pass
+
 
 
