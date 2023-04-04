@@ -1,4 +1,5 @@
 import math
+import pygame
 
 
 WIDTH = 800
@@ -9,7 +10,7 @@ CENTER = (CENTER_X, CENTER_Y)
 FONT_COLOR = (0, 0, 0)
 EGG_TARGET = 20
 HERO_START = (200, 300)
-ATTACK_DISTANCE = 200
+ATTACK_DISTANCE = 100
 DRAGON_WAKE_TIME = 2
 EGG_HIDE_TIME = 2
 MOVE_DISTANCE = 5
@@ -24,10 +25,11 @@ reset_required = False
 # levels as dictionaries
 
 easy_lair = {
-    "dragon": Actor("C:\\tmp\\sleeping_dragons\\images\\dragon-asleep.png", pos=(600, 100)),
-    "eggs": Actor("C:\\tmp\\sleeping_dragons\\images\\one-egg.png", pos=(400, 100)),
+    "dragon": Actor("dragon-asleep.png", pos=(600, 100)),
+    "eggs": Actor("one-egg.png", pos=(400, 100)),
     "egg_count": 1,
     "egg_hidden": False,
+    "egg_hide_counter": 0,
     "sleep_length": 10,
     "sleep_counter": 0,
     "wake_counter": 0
@@ -35,10 +37,11 @@ easy_lair = {
 
 
 medium_lair = {
-    "dragon": Actor("C:\\tmp\\sleeping_dragons\\images\\dragon-asleep.png", pos=(600, 300)),
-    "eggs": Actor("C:\\tmp\\sleeping_dragons\\images\\two-eggs.png", pos=(400, 300)),
+    "dragon": Actor("dragon-asleep.png", pos=(600, 300)),
+    "eggs": Actor("two-eggs.png", pos=(400, 300)),
     "egg_count": 2,
     "egg_hidden": False,
+    "egg_hide_counter": 0,
     "sleep_length": 7,
     "sleep_counter": 0,
     "wake_counter": 0
@@ -46,23 +49,24 @@ medium_lair = {
 
 
 hard_lair = {
-    "dragon": Actor("C:\\tmp\\sleeping_dragons\\images\\dragon-asleep.png", pos=(600, 500)),
-    "eggs": Actor("C:\\tmp\\sleeping_dragons\\images\\three-eggs.png", pos=(400, 500)),
+    "dragon": Actor("dragon-asleep.png", pos=(600, 500)),
+    "eggs": Actor("three-eggs.png", pos=(400, 500)),
     "egg_count": 3,
     "egg_hidden": False,
+    "egg_hide_counter": 0,
     "sleep_length": 4,
     "sleep_counter": 0,
     "wake_counter": 0
 }
 
 lairs = [easy_lair, medium_lair, hard_lair]
-hero = Actor("C:\\tmp\sleeping_dragons\\images\\hero.png", pos=HERO_START)
+hero = Actor("hero.png", pos=HERO_START)
 
 
 def draw():
     global lais, eggs_collected, game_complete
     screen.clear()
-    screen.blit("C:\\tmp\\sleeping_dragons\\images\\dungeon.png", (0, 0))
+    screen.blit("dungeon.png", (0, 0))
     if game_over:
         screen.draw.text("GAME OVER!", fontsize=60, center=CENTER, color=FONT_COLOR)
     elif game_complete:
@@ -72,7 +76,6 @@ def draw():
         draw_lairs(lairs)
         draw_counters(eggs_collected,lives)
 
-    
 def draw_lairs(lairs_to_draw):
     for lair in lairs_to_draw:
         lair["dragon"].draw()
@@ -80,11 +83,10 @@ def draw_lairs(lairs_to_draw):
             lair["eggs"].draw()
 
 def draw_counters(eggs_collected, lives):
-    screen.blit("C:\\tmp\\sleeping_dragons\\images\\egg-count.png", (0, HEIGHT - 30))
+    screen.blit("egg-count.png", (0, HEIGHT - 30))
     screen.draw.text(str(eggs_collected), fontsize=40, pos=(30, HEIGHT -30), color=FONT_COLOR)
-    screen.blit("C:\\tmp\\sleeping_dragons\\images\\life-count.png", (60, HEIGHT - 30))
+    screen.blit("life-count.png", (60, HEIGHT - 30))
     screen.draw.text(str(lives), fontsize=40, pos=(90, HEIGHT -30), color=FONT_COLOR)
-
 
 def update():
     if keyboard.right:
@@ -108,9 +110,9 @@ def update():
 def update_lairs():
     global lairs, hero, lives
     for lair in lairs:
-        if lair["dragon"].image == "dragon-asleep":
+        if lair["dragon"].image == "dragon-asleep.png":
             update_sleeping_dragon(lair)
-        elif lair["dragon"].image == "dragon-awake":
+        elif lair["dragon"].image == "dragon-awake.png":
             update_waking_dragon(lair)
         update_egg(lair)
 
@@ -125,13 +127,56 @@ def update_sleeping_dragon(lair):
 
 def update_waking_dragon(lair):
     if lair["wake_counter"] >= DRAGON_WAKE_TIME:
-        lair["dragon"].image = "dragon-asleep"
+        lair["dragon"].image = "dragon-asleep.png"
         lair["wake_counter"] = 0
     else:
         lair["wake_counter"] += 1 
 
+def update_egg(lair):
+    if lair["egg_hidden"] is True:
+        if lair["egg_hide_counter"] >= EGG_HIDE_TIME:
+            lair["egg_hidden"] = False
+            lair["egg_hide_counter"] = 0
+        else:
+            lair["egg_hide_counter"] += 1
+
 def check_for_collisions():
-    pass
+    global lairs, eggs_collected, lives, reset_required, game_complete
+    for lair in lairs:
+        if lair["egg_hidden"] is False:
+            check_for_egg_collision(lair)
+        if lair["dragon"].image == "dragon-awake.png" and reset_required is False:
+            check_for_dragon_collision(lair)
+
+def check_for_dragon_collision(lair):
+    x_distance = hero.x - lair["dragon"].x
+    y_distance = hero.y - lair["dragon"].y
+    distance = math.hypot(x_distance, y_distance)
+    if distance < ATTACK_DISTANCE:
+        handle_dragon_collision()
+
+
+def handle_dragon_collision():
+    global reset_required
+    reset_required = True
+    animate(hero, pos=HERO_START, on_finished=subtract_life)
+
+
+def check_for_egg_collision(lair):
+    global eggs_collected, game_complete
+    if hero.colliderect(lair["eggs"]):
+        lair["egg_hidden"] = True
+        eggs_collected += lair["egg_count"]
+        if eggs_collected >= EGG_TARGET:
+            game_complete = True
+
+
+def subtract_life():
+    global lives, reset_required, game_over
+    lives -= 1
+    if lives == 0:
+        game_over = True
+    reset_required = False
 
 
 
