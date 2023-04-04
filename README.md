@@ -17,4 +17,8 @@ To teach myself and my son how games are created through Python programming.
 2. Run ```pgzrun sleeping_dragons.py``` from the working directory.
 3. Enjoy!
 
-### #TODO
+### TODO
+- [ ] convert from pgz to pygame
+- [ ] add background music
+- [ ] change hitbox of flames
+- [ ] enhance death screen
