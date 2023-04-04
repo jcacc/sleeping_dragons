@@ -105,6 +105,31 @@ def update():
             hero.y = 0
     check_for_collisions()
 
+def update_lairs():
+    global lairs, hero, lives
+    for lair in lairs:
+        if lair["dragon"].image == "dragon-asleep":
+            update_sleeping_dragon(lair)
+        elif lair["dragon"].image == "dragon-awake":
+            update_waking_dragon(lair)
+        update_egg(lair)
+
+clock.schedule_interval(update_lairs, 1)
+
+def update_sleeping_dragon(lair):
+    if lair["sleep_counter"] >= lair["sleep_length"]:
+        lair["dragon"].image = "dragon-awake"
+        lair["sleep_counter"] = 0
+    else:
+        lair["sleep_counter"] += 1
+
+def update_waking_dragon(lair):
+    if lair["wake_counter"] >= DRAGON_WAKE_TIME:
+        lair["dragon"].image = "dragon-asleep"
+        lair["wake_counter"] = 0
+    else:
+        lair["wake_counter"] += 1 
+
 def check_for_collisions():
     pass
 
