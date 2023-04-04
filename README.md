@@ -7,7 +7,7 @@ Grab your shield and sword as you go in search of dragon treasure. Time your mov
 *Coding Games in Python* by DK Publishing
 
 ### Purpose
-To teach myself and my son how games are created through Python programming
+To teach myself and my son how games are created through Python programming.
 
 ### Instructions
 
