@@ -3,7 +3,7 @@
 ### Objective
 Grab your shield and sword as you go in search of dragon treasure. Time your movements to snatch the eggs from under the dragons' noses.
 
-(https://github.com/jcacc/sleeping_dragons/blob/master/demo-video_sleeping_dragons.mp4)
+(https://user-images.githubusercontent.com/5677628/229828213-a0498eff-96a4-4249-9bba-e5366072d75c.mp4)
 
 ### Source
 *Coding Games in Python* by DK Publishing
