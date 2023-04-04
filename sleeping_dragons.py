@@ -1,6 +1,4 @@
 import math
-import pygame
-
 
 WIDTH = 800
 HEIGHT = 600
@@ -112,15 +110,16 @@ def update_lairs():
     for lair in lairs:
         if lair["dragon"].image == "dragon-asleep.png":
             update_sleeping_dragon(lair)
-        elif lair["dragon"].image == "dragon-awake.png":
+        elif lair["dragon"].image == "dragon-awake.png.png":
             update_waking_dragon(lair)
+            check_for_dragon_collision(lair)
         update_egg(lair)
 
 clock.schedule_interval(update_lairs, 1)
 
 def update_sleeping_dragon(lair):
     if lair["sleep_counter"] >= lair["sleep_length"]:
-        lair["dragon"].image = "dragon-awake"
+        lair["dragon"].image = "dragon-awake.png"
         lair["sleep_counter"] = 0
     else:
         lair["sleep_counter"] += 1
