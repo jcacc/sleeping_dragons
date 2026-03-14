@@ -1,121 +1,247 @@
+import pygame
 import math
+import os
+import sys
 
+# --- Constants ---
 WIDTH = 800
 HEIGHT = 600
-CENTER_X = WIDTH / 2
-CENTER_Y = HEIGHT / 2
-CENTER = (CENTER_X, CENTER_Y)
+FPS = 60
+CENTER = (WIDTH // 2, HEIGHT // 2)
 FONT_COLOR = (0, 0, 0)
 EGG_TARGET = 20
 HERO_START = (200, 300)
 ATTACK_DISTANCE = 200
-DRAGON_WAKE_TIME = 2
-EGG_HIDE_TIME = 2
+DRAGON_WAKE_TIME = 2    # seconds (lair update ticks)
+EGG_HIDE_TIME = 2       # seconds (lair update ticks)
 MOVE_DISTANCE = 5
 
+IMAGES_DIR = os.path.join(os.path.dirname(__file__), "images")
+MUSIC_PATH = os.path.join(os.path.dirname(__file__), "music", "dungeon.ogg")
+
+# --- Init ---
+pygame.init()
+pygame.mixer.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Sleeping Dragons")
+game_clock = pygame.time.Clock()
+
+# --- Image cache ---
+_image_cache = {}
+
+def load_image(name):
+    if name not in _image_cache:
+        img = pygame.image.load(os.path.join(IMAGES_DIR, name)).convert_alpha()
+        _image_cache[name] = img
+    return _image_cache[name]
+
+# --- Actor ---
+class Actor:
+    def __init__(self, image_name, pos):
+        self.image_name = image_name
+        self._surface = load_image(image_name)
+        self._rect = self._surface.get_rect(center=pos)
+
+    @property
+    def image(self):
+        return self.image_name
+
+    @image.setter
+    def image(self, name):
+        self.image_name = name
+        center = self._rect.center
+        self._surface = load_image(name)
+        self._rect = self._surface.get_rect(center=center)
+
+    @property
+    def x(self):
+        return self._rect.centerx
+
+    @x.setter
+    def x(self, val):
+        self._rect.centerx = int(val)
+
+    @property
+    def y(self):
+        return self._rect.centery
+
+    @y.setter
+    def y(self, val):
+        self._rect.centery = int(val)
+
+    @property
+    def pos(self):
+        return self._rect.center
+
+    @pos.setter
+    def pos(self, val):
+        self._rect.center = (int(val[0]), int(val[1]))
+
+    def draw(self, surf):
+        surf.blit(self._surface, self._rect)
+
+    def colliderect(self, other):
+        return self._rect.colliderect(other._rect)
+
+# --- Animation ---
+class Animation:
+    def __init__(self, actor, target_pos, duration=0.5, on_finished=None):
+        self.actor = actor
+        self.start_pos = (float(actor.x), float(actor.y))
+        self.target_pos = (float(target_pos[0]), float(target_pos[1]))
+        self.duration = duration
+        self.elapsed = 0.0
+        self.on_finished = on_finished
+        self.done = False
+
+    def update(self, dt):
+        if self.done:
+            return
+        self.elapsed += dt
+        t = min(self.elapsed / self.duration, 1.0)
+        self.actor.x = self.start_pos[0] + (self.target_pos[0] - self.start_pos[0]) * t
+        self.actor.y = self.start_pos[1] + (self.target_pos[1] - self.start_pos[1]) * t
+        if t >= 1.0:
+            self.done = True
+            if self.on_finished:
+                self.on_finished()
+
+# --- Game state ---
 lives = 3
 eggs_collected = 0
 game_over = False
 game_complete = False
 reset_required = False
+active_animation = None
+lair_update_timer = 0.0
 
+def make_lairs():
+    return [
+        {
+            "dragon": Actor("dragon-asleep.png", pos=(600, 100)),
+            "eggs": Actor("one-egg.png", pos=(400, 100)),
+            "egg_count": 1,
+            "egg_hidden": False,
+            "egg_hide_counter": 0,
+            "sleep_length": 10,
+            "sleep_counter": 0,
+            "wake_counter": 0,
+        },
+        {
+            "dragon": Actor("dragon-asleep.png", pos=(600, 300)),
+            "eggs": Actor("two-eggs.png", pos=(400, 300)),
+            "egg_count": 2,
+            "egg_hidden": False,
+            "egg_hide_counter": 0,
+            "sleep_length": 7,
+            "sleep_counter": 0,
+            "wake_counter": 0,
+        },
+        {
+            "dragon": Actor("dragon-asleep.png", pos=(600, 500)),
+            "eggs": Actor("three-eggs.png", pos=(400, 500)),
+            "egg_count": 3,
+            "egg_hidden": False,
+            "egg_hide_counter": 0,
+            "sleep_length": 4,
+            "sleep_counter": 0,
+            "wake_counter": 0,
+        },
+    ]
 
-# levels as dictionaries
-
-easy_lair = {
-    "dragon": Actor("dragon-asleep.png", pos=(600, 100)),
-    "eggs": Actor("one-egg.png", pos=(400, 100)),
-    "egg_count": 1,
-    "egg_hidden": False,
-    "egg_hide_counter": 0,
-    "sleep_length": 10,
-    "sleep_counter": 0,
-    "wake_counter": 0
-}
-
-
-medium_lair = {
-    "dragon": Actor("dragon-asleep.png", pos=(600, 300)),
-    "eggs": Actor("two-eggs.png", pos=(400, 300)),
-    "egg_count": 2,
-    "egg_hidden": False,
-    "egg_hide_counter": 0,
-    "sleep_length": 7,
-    "sleep_counter": 0,
-    "wake_counter": 0
-}
-
-
-hard_lair = {
-    "dragon": Actor("dragon-asleep.png", pos=(600, 500)),
-    "eggs": Actor("three-eggs.png", pos=(400, 500)),
-    "egg_count": 3,
-    "egg_hidden": False,
-    "egg_hide_counter": 0,
-    "sleep_length": 4,
-    "sleep_counter": 0,
-    "wake_counter": 0
-}
-
-lairs = [easy_lair, medium_lair, hard_lair]
+lairs = make_lairs()
 hero = Actor("hero.png", pos=HERO_START)
 
+# --- Assets ---
+background = load_image("dungeon.png")
+egg_count_img = load_image("egg-count.png")
+life_count_img = load_image("life-count.png")
 
+font_big = pygame.font.SysFont(None, 90)
+font_med = pygame.font.SysFont(None, 52)
+font_small = pygame.font.SysFont(None, 40)
+
+# --- Music ---
+# Drop an OGG/MP3 file at music/dungeon.ogg to enable background music
+if os.path.exists(MUSIC_PATH):
+    pygame.mixer.music.load(MUSIC_PATH)
+    pygame.mixer.music.set_volume(0.5)
+    pygame.mixer.music.play(-1)
+
+# --- Draw ---
 def draw():
-    global lais, eggs_collected, game_complete
-    screen.clear()
-    screen.blit("dungeon.png", (0, 0))
+    screen.blit(background, (0, 0))
     if game_over:
-        screen.draw.text("GAME OVER!", fontsize=60, center=CENTER, color=FONT_COLOR)
+        draw_game_over()
     elif game_complete:
-        screen.draw.text("YOU WON!", fontsize=60, center=CENTER, color=FONT_COLOR)
+        draw_win_screen()
     else:
-        hero.draw()
-        draw_lairs(lairs)
-        draw_counters(eggs_collected,lives)
+        hero.draw(screen)
+        draw_lairs()
+        draw_hud()
 
-def draw_lairs(lairs_to_draw):
-    for lair in lairs_to_draw:
-        lair["dragon"].draw()
-        if lair["egg_hidden"] is False:
-            lair["eggs"].draw()
+def draw_lairs():
+    for lair in lairs:
+        lair["dragon"].draw(screen)
+        if not lair["egg_hidden"]:
+            lair["eggs"].draw(screen)
 
-def draw_counters(eggs_collected, lives):
-    screen.blit("egg-count.png", (0, HEIGHT - 30))
-    screen.draw.text(str(eggs_collected), fontsize=40, pos=(30, HEIGHT -30), color=FONT_COLOR)
-    screen.blit("life-count.png", (60, HEIGHT - 30))
-    screen.draw.text(str(lives), fontsize=40, pos=(90, HEIGHT -30), color=FONT_COLOR)
+def draw_hud():
+    screen.blit(egg_count_img, (0, HEIGHT - 30))
+    screen.blit(font_small.render(str(eggs_collected), True, FONT_COLOR), (32, HEIGHT - 30))
+    screen.blit(life_count_img, (60, HEIGHT - 30))
+    screen.blit(font_small.render(str(lives), True, FONT_COLOR), (92, HEIGHT - 30))
 
-def update():
-    if keyboard.right:
-        hero.x += MOVE_DISTANCE
-        if hero.x > WIDTH:
-            hero.x = WIDTH
-    elif keyboard.left:
-        hero.x -= MOVE_DISTANCE
-        if hero.x < 0:
-            hero.x = 0
-    elif keyboard.down:
-        hero.y += MOVE_DISTANCE
-        if hero.y > HEIGHT:
-            hero.y = HEIGHT
-    elif keyboard.up:
-        hero.y -= MOVE_DISTANCE
-        if hero.y < 0:
-            hero.y = 0
+def draw_overlay(alpha):
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, alpha))
+    screen.blit(overlay, (0, 0))
+
+def draw_centered(surf, y):
+    screen.blit(surf, surf.get_rect(center=(CENTER[0], y)))
+
+def draw_game_over():
+    draw_overlay(170)
+    draw_centered(font_big.render("GAME OVER", True, (220, 40, 40)),    CENTER[1] - 80)
+    draw_centered(font_med.render(f"You snagged {eggs_collected} of {EGG_TARGET} eggs", True, (255, 200, 200)), CENTER[1])
+    draw_centered(font_small.render("Press R to try again", True, (180, 180, 180)),        CENTER[1] + 70)
+
+def draw_win_screen():
+    draw_overlay(130)
+    draw_centered(font_big.render("YOU WON!", True, (255, 215, 0)),        CENTER[1] - 80)
+    draw_centered(font_med.render(f"All {EGG_TARGET} eggs collected!", True, (255, 255, 200)), CENTER[1])
+    draw_centered(font_small.render("Press R to play again", True, (180, 180, 180)),       CENTER[1] + 70)
+
+# --- Update ---
+def update(dt, keys):
+    global active_animation
+    if game_over or game_complete:
+        return
+    if not reset_required:
+        handle_input(keys)
+    if active_animation:
+        active_animation.update(dt)
+        if active_animation.done:
+            active_animation = None
     check_for_collisions()
 
+def handle_input(keys):
+    if keys[pygame.K_RIGHT]:
+        hero.x = min(hero.x + MOVE_DISTANCE, WIDTH)
+    elif keys[pygame.K_LEFT]:
+        hero.x = max(hero.x - MOVE_DISTANCE, 0)
+    elif keys[pygame.K_DOWN]:
+        hero.y = min(hero.y + MOVE_DISTANCE, HEIGHT)
+    elif keys[pygame.K_UP]:
+        hero.y = max(hero.y - MOVE_DISTANCE, 0)
+
 def update_lairs():
-    global lairs, hero, lives
     for lair in lairs:
         if lair["dragon"].image == "dragon-asleep.png":
             update_sleeping_dragon(lair)
-        elif lair["dragon"].image == "dragon-awake.png.png":
+        elif lair["dragon"].image == "dragon-awake.png":
             update_waking_dragon(lair)
-            check_for_dragon_collision(lair)
         update_egg(lair)
-
-clock.schedule_interval(update_lairs, 1)
 
 def update_sleeping_dragon(lair):
     if lair["sleep_counter"] >= lair["sleep_length"]:
@@ -129,10 +255,10 @@ def update_waking_dragon(lair):
         lair["dragon"].image = "dragon-asleep.png"
         lair["wake_counter"] = 0
     else:
-        lair["wake_counter"] += 1 
+        lair["wake_counter"] += 1
 
 def update_egg(lair):
-    if lair["egg_hidden"] is True:
+    if lair["egg_hidden"]:
         if lair["egg_hide_counter"] >= EGG_HIDE_TIME:
             lair["egg_hidden"] = False
             lair["egg_hide_counter"] = 0
@@ -140,26 +266,24 @@ def update_egg(lair):
             lair["egg_hide_counter"] += 1
 
 def check_for_collisions():
-    global lairs, eggs_collected, lives, reset_required, game_complete
     for lair in lairs:
-        if lair["egg_hidden"] is False:
+        if not lair["egg_hidden"]:
             check_for_egg_collision(lair)
-        if lair["dragon"].image == "dragon-awake.png" and reset_required is False:
+        if lair["dragon"].image == "dragon-awake.png" and not reset_required:
             check_for_dragon_collision(lair)
 
 def check_for_dragon_collision(lair):
-    x_distance = hero.x - lair["dragon"].x
-    y_distance = hero.y - lair["dragon"].y
-    distance = math.hypot(x_distance, y_distance)
-    if distance < ATTACK_DISTANCE:
+    dx = hero.x - lair["dragon"].x
+    dy = hero.y - lair["dragon"].y
+    distance = math.hypot(dx, dy)
+    in_flame_cone = dx < 50 and abs(dy) < ATTACK_DISTANCE * 0.6
+    if distance < ATTACK_DISTANCE and in_flame_cone:
         handle_dragon_collision()
 
-
 def handle_dragon_collision():
-    global reset_required
+    global reset_required, active_animation
     reset_required = True
-    animate(hero, pos=HERO_START, on_finished=subtract_life)
-
+    active_animation = Animation(hero, HERO_START, duration=0.5, on_finished=subtract_life)
 
 def check_for_egg_collision(lair):
     global eggs_collected, game_complete
@@ -169,7 +293,6 @@ def check_for_egg_collision(lair):
         if eggs_collected >= EGG_TARGET:
             game_complete = True
 
-
 def subtract_life():
     global lives, reset_required, game_over
     lives -= 1
@@ -177,5 +300,44 @@ def subtract_life():
         game_over = True
     reset_required = False
 
+def reset_game():
+    global lives, eggs_collected, game_over, game_complete
+    global reset_required, lairs, active_animation, lair_update_timer
+    lives = 3
+    eggs_collected = 0
+    game_over = False
+    game_complete = False
+    reset_required = False
+    active_animation = None
+    lair_update_timer = 0.0
+    lairs = make_lairs()
+    hero.pos = HERO_START
 
+# --- Main loop ---
+def main():
+    global lair_update_timer
+    while True:
+        dt = game_clock.tick(FPS) / 1000.0
+        keys = pygame.key.get_pressed()
 
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r and (game_over or game_complete):
+                    reset_game()
+
+        update(dt, keys)
+
+        lair_update_timer += dt
+        if lair_update_timer >= 1.0:
+            lair_update_timer -= 1.0
+            if not game_over and not game_complete:
+                update_lairs()
+
+        draw()
+        pygame.display.flip()
+
+if __name__ == "__main__":
+    main()
